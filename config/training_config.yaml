@@ -1,0 +1,41 @@
+# Training Configuration for Chef AI
+
+model:
+  name: "gpt2"  # Options: gpt2, gpt2-medium, gpt2-large, EleutherAI/gpt-j-6B, etc.
+  max_length: 512
+  tokenizer_name: null  # Uses model name if not specified
+
+training:
+  learning_rate: 5.0e-5
+  batch_size: 4
+  num_epochs: 3
+  warmup_steps: 100
+  weight_decay: 0.01
+  gradient_accumulation_steps: 1
+  fp16: false  # Mixed precision training
+  seed: 42
+
+paths:
+  data_dir: "data/processed/cleaned"
+  output_dir: "models/checkpoints"
+  final_model_dir: "models/final/chef_model"
+  logging_dir: "logs"
+
+saving:
+  save_steps: 500
+  save_total_limit: 3
+  load_best_model_at_end: true
+
+evaluation:
+  evaluation_strategy: "steps"
+  eval_steps: 500
+  per_device_eval_batch_size: 4
+
+logging:
+  logging_steps: 100
+  log_level: "info"
+
+data_processing:
+  train_test_split: 0.9
+  shuffle: true
+  max_examples: null  # null for all data, or specify a number for testing
