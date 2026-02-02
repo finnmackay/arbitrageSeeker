@@ -31,7 +31,7 @@ RELAY_INTERVAL = 20 * 60  # 20 minutes
 def scrape_station(station_id):
     """
     Scrape latest weather from a WU station dashboard.
-    Returns dict with temp_f, humidity, baromin (any can be None), or None on failure.
+    Returns dict with all available fields, or None on failure.
     """
     url = f"https://www.wunderground.com/dashboard/pws/{station_id}"
     
@@ -57,7 +57,7 @@ def scrape_station(station_id):
     latest = obs_matches[-1]
     out = {}
     
-    # Temperature
+    # === TEMPERATURE ===
     m = re.search(r'"tempAvg":\s*([\d.]+)', latest)
     if m:
         out["temp_f"] = float(m.group(1))
@@ -66,15 +66,50 @@ def scrape_station(station_id):
         if m:
             out["temp_f"] = float(m.group(1))
     
-    # Humidity
+    # === HUMIDITY === (outside imperial block)
     m = re.search(r'"humidityAvg":\s*([\d.]+)', latest)
     if m:
         out["humidity"] = float(m.group(1))
     
-    # Pressure
-    m = re.search(r'"pressureM(?:ax|in)":\s*([\d.]+)', latest)
+    # === PRESSURE ===
+    m = re.search(r'"pressureMax":\s*([\d.]+)', latest)
     if m:
         out["baromin"] = float(m.group(1))
+    
+    # === DEWPOINT ===
+    m = re.search(r'"dewptAvg":\s*([\d.]+)', latest)
+    if m:
+        out["dewpt_f"] = float(m.group(1))
+    
+    # === WIND SPEED ===
+    m = re.search(r'"windspeedAvg":\s*([\d.]+)', latest)
+    if m:
+        out["windspeed_mph"] = float(m.group(1))
+    
+    # === WIND GUST ===
+    m = re.search(r'"windgustHigh":\s*([\d.]+)', latest)
+    if m:
+        out["windgust_mph"] = float(m.group(1))
+    
+    # === WIND DIRECTION === (outside imperial block)
+    m = re.search(r'"winddirAvg":\s*([\d.]+)', latest)
+    if m:
+        out["winddir"] = int(float(m.group(1)))
+    
+    # === PRECIP RATE ===
+    m = re.search(r'"precipRate":\s*([\d.]+)', latest)
+    if m:
+        out["precip_rate"] = float(m.group(1))
+    
+    # === PRECIP TOTAL (daily) ===
+    m = re.search(r'"precipTotal":\s*([\d.]+)', latest)
+    if m:
+        out["precip_daily"] = float(m.group(1))
+    
+    # === UV INDEX === (can be null)
+    m = re.search(r'"uvHigh":\s*([\d.]+)', latest)
+    if m:
+        out["uv"] = float(m.group(1))
     
     if not out.get("temp_f"):
         print(f"  [{station_id}] No temperature found")
@@ -86,7 +121,7 @@ def scrape_station(station_id):
 def scrape_and_average():
     """
     Scrape all source stations and return averaged values.
-    Returns dict with temp_f, humidity, baromin (averaged), or None if all fail.
+    Returns (averaged_dict, count) or None if all fail.
     """
     readings = []
     
@@ -100,22 +135,24 @@ def scrape_and_average():
     if not readings:
         return None
     
-    # Average the values
+    # Average all fields
     avg = {}
     
-    # Temperature (required)
-    temps = [r["temp_f"] for r in readings]
-    avg["temp_f"] = sum(temps) / len(temps)
+    # Helper to average a field across readings
+    def avg_field(key):
+        vals = [r[key] for r in readings if r.get(key) is not None]
+        return sum(vals) / len(vals) if vals else None
     
-    # Humidity (optional)
-    humidities = [r["humidity"] for r in readings if r.get("humidity")]
-    if humidities:
-        avg["humidity"] = int(sum(humidities) / len(humidities))
-    
-    # Pressure (optional)
-    pressures = [r["baromin"] for r in readings if r.get("baromin")]
-    if pressures:
-        avg["baromin"] = sum(pressures) / len(pressures)
+    avg["temp_f"] = avg_field("temp_f")
+    avg["humidity"] = avg_field("humidity")
+    avg["baromin"] = avg_field("baromin")
+    avg["dewpt_f"] = avg_field("dewpt_f")
+    avg["windspeed_mph"] = avg_field("windspeed_mph")
+    avg["windgust_mph"] = avg_field("windgust_mph")
+    avg["winddir"] = avg_field("winddir")
+    avg["precip_rate"] = avg_field("precip_rate")
+    avg["precip_daily"] = avg_field("precip_daily")
+    avg["uv"] = avg_field("uv")
     
     return avg, len(readings)
 
@@ -129,13 +166,40 @@ def upload_weather(obs):
         "ID": WU_STATION_ID,
         "PASSWORD": WU_STATION_KEY,
         "dateutc": "now",
-        "tempf": f"{obs['temp_f']:.1f}",
         "action": "updateraw",
     }
-    if obs.get("humidity"):
-        params["humidity"] = str(obs["humidity"])
-    if obs.get("baromin"):
+    
+    # Required
+    if obs.get("temp_f") is not None:
+        params["tempf"] = f"{obs['temp_f']:.1f}"
+    
+    # Optional fields
+    if obs.get("humidity") is not None:
+        params["humidity"] = f"{obs['humidity']:.0f}"
+    
+    if obs.get("baromin") is not None:
         params["baromin"] = f"{obs['baromin']:.2f}"
+    
+    if obs.get("dewpt_f") is not None:
+        params["dewptf"] = f"{obs['dewpt_f']:.1f}"
+    
+    if obs.get("windspeed_mph") is not None:
+        params["windspeedmph"] = f"{obs['windspeed_mph']:.1f}"
+    
+    if obs.get("windgust_mph") is not None:
+        params["windgustmph"] = f"{obs['windgust_mph']:.1f}"
+    
+    if obs.get("winddir") is not None:
+        params["winddir"] = f"{obs['winddir']:.0f}"
+    
+    if obs.get("precip_rate") is not None:
+        params["rainin"] = f"{obs['precip_rate']:.2f}"
+    
+    if obs.get("precip_daily") is not None:
+        params["dailyrainin"] = f"{obs['precip_daily']:.2f}"
+    
+    if obs.get("uv") is not None:
+        params["UV"] = f"{obs['uv']:.1f}"
     
     url = f"{WU_UPLOAD_URL}?{urllib.parse.urlencode(params)}"
     
@@ -147,14 +211,29 @@ def upload_weather(obs):
         return False, str(e)
 
 
+def format_obs(obs):
+    """Format observation for display."""
+    parts = []
+    if obs.get("temp_f") is not None:
+        temp_c = (obs["temp_f"] - 32) * 5 / 9
+        parts.append(f"{obs['temp_f']:.1f}°F ({temp_c:.1f}°C)")
+    if obs.get("humidity") is not None:
+        parts.append(f"humidity={obs['humidity']:.0f}%")
+    if obs.get("windspeed_mph") is not None:
+        parts.append(f"wind={obs['windspeed_mph']:.1f}mph")
+    if obs.get("baromin") is not None:
+        parts.append(f"pressure={obs['baromin']:.2f}\"")
+    return " | ".join(parts) if parts else "no data"
+
+
 def main():
     once = "--once" in sys.argv
     
-    print("=" * 50)
+    print("=" * 60)
     print(f"WU RELAY: {len(SOURCE_STATIONS)} station(s) → {WU_STATION_ID}")
     print(f"Sources: {', '.join(SOURCE_STATIONS)}")
     print(f"Interval: {RELAY_INTERVAL // 60} min" if not once else "Mode: single run")
-    print("=" * 50)
+    print("=" * 60)
     
     while True:
         print(f"\n[{datetime.now():%H:%M:%S}] Scraping {len(SOURCE_STATIONS)} station(s)...")
@@ -165,12 +244,11 @@ def main():
             print(f"[{datetime.now():%H:%M:%S}] All stations failed to scrape")
         else:
             avg, count = result
-            temp_c = (avg["temp_f"] - 32) * 5 / 9
             
             success, response = upload_weather(avg)
             
             if success:
-                print(f"[{datetime.now():%H:%M:%S}] AVG from {count} station(s): {avg['temp_f']:.1f}°F ({temp_c:.1f}°C) → uploaded OK")
+                print(f"[{datetime.now():%H:%M:%S}] AVG from {count} station(s): {format_obs(avg)} → uploaded OK")
             else:
                 print(f"[{datetime.now():%H:%M:%S}] Upload failed: {response}")
         
