@@ -1,0 +1,6 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "python3 wu_relay_test.py"
+restartPolicyType = "ON_FAILURE"
