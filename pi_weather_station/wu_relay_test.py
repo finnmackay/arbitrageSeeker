@@ -8,6 +8,7 @@ Run: python3 wu_relay_test.py --once   # single run then exit
 import re
 import sys
 import time
+import json
 import urllib.request
 import urllib.parse
 from datetime import datetime
@@ -21,11 +22,31 @@ SOURCE_STATIONS = [
     # "ILONDO456",  # Add third station if needed
 ]
 
-WU_STATION_ID = "ILONDO983"
-WU_STATION_KEY = "CPBgPEJX"
+WU_STATION_ID = "IETIME4"
+WU_STATION_KEY = "1TekZfvP"
 WU_UPLOAD_URL = "https://weatherstation.wunderground.com/weatherstation/updateweatherstation.php"
 RELAY_INTERVAL = 20 * 60  # 20 minutes
+
+# Discord webhook for notifications
+DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1467961370187403515/vXF38N-41_naJLAsjj3zTnzVVtFuKIHsS26zklIpnwwDRoI466DxMRz2Ch9pOt0Q_aav"
 # =============================================================================
+
+
+def send_discord(message):
+    """Send a message to Discord webhook."""
+    if not DISCORD_WEBHOOK:
+        return
+    try:
+        data = json.dumps({"content": message}).encode("utf-8")
+        req = urllib.request.Request(
+            DISCORD_WEBHOOK,
+            data=data,
+            headers={"Content-Type": "application/json", "User-Agent": "Mozilla/5.0"}
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            pass
+    except Exception as e:
+        print(f"Discord error: {e}")
 
 
 def scrape_station(station_id):
@@ -55,7 +76,7 @@ def scrape_station(station_id):
         return None
     
     latest = obs_matches[-1]
-    out = {}
+    out = {"station_id": station_id}
     
     # === TEMPERATURE ===
     m = re.search(r'"tempAvg":\s*([\d.]+)', latest)
@@ -121,7 +142,7 @@ def scrape_station(station_id):
 def scrape_and_average():
     """
     Scrape all source stations and return averaged values.
-    Returns (averaged_dict, count) or None if all fail.
+    Returns (averaged_dict, readings_list, count) or None if all fail.
     """
     readings = []
     
@@ -154,7 +175,7 @@ def scrape_and_average():
     avg["precip_daily"] = avg_field("precip_daily")
     avg["uv"] = avg_field("uv")
     
-    return avg, len(readings)
+    return avg, readings, len(readings)
 
 
 def upload_weather(obs):
@@ -211,18 +232,22 @@ def upload_weather(obs):
         return False, str(e)
 
 
-def format_obs(obs):
+def format_obs(obs, show_all=False):
     """Format observation for display."""
     parts = []
     if obs.get("temp_f") is not None:
         temp_c = (obs["temp_f"] - 32) * 5 / 9
-        parts.append(f"{obs['temp_f']:.1f}°F ({temp_c:.1f}°C)")
+        parts.append(f"🌡️ {obs['temp_f']:.1f}°F ({temp_c:.1f}°C)")
     if obs.get("humidity") is not None:
-        parts.append(f"humidity={obs['humidity']:.0f}%")
+        parts.append(f"💧 {obs['humidity']:.0f}%")
     if obs.get("windspeed_mph") is not None:
-        parts.append(f"wind={obs['windspeed_mph']:.1f}mph")
-    if obs.get("baromin") is not None:
-        parts.append(f"pressure={obs['baromin']:.2f}\"")
+        parts.append(f"💨 {obs['windspeed_mph']:.1f}mph")
+    if show_all:
+        if obs.get("baromin") is not None:
+            parts.append(f"📊 {obs['baromin']:.2f}\"")
+        if obs.get("dewpt_f") is not None:
+            temp_c = (obs["dewpt_f"] - 32) * 5 / 9
+            parts.append(f"🌫️ Dew {obs['dewpt_f']:.1f}°F")
     return " | ".join(parts) if parts else "no data"
 
 
@@ -242,10 +267,32 @@ def main():
         
         if not result:
             print(f"[{datetime.now():%H:%M:%S}] All stations failed to scrape")
+            send_discord("❌ **WU Relay:** All stations failed to scrape")
         else:
-            avg, count = result
+            avg, readings, count = result
             
             success, response = upload_weather(avg)
+            
+            # Build Discord message
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            discord_msg = f"**WU Relay** ({timestamp})\n\n"
+            discord_msg += "**📡 Scraped:**\n"
+            for r in readings:
+                temp_c = (r["temp_f"] - 32) * 5 / 9
+                discord_msg += f"• {r['station_id']}: {r['temp_f']:.1f}°F ({temp_c:.1f}°C)"
+                if r.get("humidity"):
+                    discord_msg += f" | 💧{r['humidity']:.0f}%"
+                if r.get("windspeed_mph"):
+                    discord_msg += f" | 💨{r['windspeed_mph']:.1f}mph"
+                discord_msg += "\n"
+            
+            discord_msg += f"\n**📤 Uploaded to {WU_STATION_ID}:**\n"
+            if success:
+                discord_msg += f"✅ {format_obs(avg, show_all=True)}"
+            else:
+                discord_msg += f"❌ Failed: {response}"
+            
+            send_discord(discord_msg)
             
             if success:
                 print(f"[{datetime.now():%H:%M:%S}] AVG from {count} station(s): {format_obs(avg)} → uploaded OK")
