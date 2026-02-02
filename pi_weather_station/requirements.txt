@@ -1,0 +1,13 @@
+# For Railway deployment (wu_relay_test.py)
+python-dotenv
+
+# Note: The relay script uses only Python standard library (urllib, json, re, time)
+# python-dotenv is optional for loading .env files
+
+# --- Pi-only packages (not for Railway) ---
+# w1thermsensor  # Only works on Raspberry Pi with DS18B20 sensor
+
+# --- Other scripts (local use only) ---
+# flask          # For computer_receiver.py
+# requests       # For other scripts
+# psycopg2-binary  # For PostgreSQL in historic_wu_upload.py
