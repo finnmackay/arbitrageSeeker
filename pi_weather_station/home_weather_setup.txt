@@ -1,0 +1,18 @@
+# Home Weather Station Setup
+# Weather Underground Credentials
+
+Station ID: ILONDO983
+Station Key: CPBgPEJX
+
+# Upload URL format:
+# https://weatherstation.wunderground.com/weatherstation/updateweatherstation.php?ID=ILONDO983&PASSWORD=CPBgPEJX&dateutc=now&tempf={temp_fahrenheit}&action=updateraw
+
+# Example Python upload:
+# import requests
+# temp_c = 8.5  # your sensor reading
+# temp_f = temp_c * 9/5 + 32
+# url = f"https://weatherstation.wunderground.com/weatherstation/updateweatherstation.php?ID=ILONDO983&PASSWORD=CPBgPEJX&dateutc=now&tempf={temp_f}&action=updateraw"
+# requests.get(url)
+
+# Cron job (every 5 mins):
+# */5 * * * * python3 /path/to/upload_temp.py
