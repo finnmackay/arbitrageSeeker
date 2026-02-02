@@ -4,9 +4,6 @@ WU Relay: Scrape weather from multiple stations, average, upload.
 
 Run: python3 wu_relay_test.py          # loop every 20 min
 Run: python3 wu_relay_test.py --once   # single run then exit
-
-Config: Edit config.py (gitignored) with your stations and credentials.
-        See config.example.py for template.
 """
 import re
 import sys
@@ -15,15 +12,20 @@ import urllib.request
 import urllib.parse
 from datetime import datetime
 
-# Import config (credentials are in gitignored config.py)
-try:
-    from config import SOURCE_STATIONS, WU_STATION_ID, WU_STATION_KEY, RELAY_INTERVAL
-except ImportError:
-    print("ERROR: config.py not found!")
-    print("Copy config.example.py to config.py and fill in your values.")
-    sys.exit(1)
+# =============================================================================
+# CONFIG
+# =============================================================================
+SOURCE_STATIONS = [
+    "IANKAR46",
+    "IANKAR59",
+    # "ILONDO456",  # Add third station if needed
+]
 
+WU_STATION_ID = "ILONDO983"
+WU_STATION_KEY = "CPBgPEJX"
 WU_UPLOAD_URL = "https://weatherstation.wunderground.com/weatherstation/updateweatherstation.php"
+RELAY_INTERVAL = 20 * 60  # 20 minutes
+# =============================================================================
 
 
 def scrape_station(station_id):
